@@ -1,0 +1,148 @@
+/* Task Escrow frontend — plain CSS (no Tailwind dependency). */
+
+@font-face {
+  font-family: 'Switzer';
+  src: url('/fonts/Switzer-Light.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Switzer';
+  src: url('/fonts/Switzer-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Switzer';
+  src: url('/fonts/Switzer-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --background: #000000;
+  --foreground: #fafafa;
+  --card: #1c1e3f;
+  --border: #34376b;
+  --accent: #9b6af6;
+  --accent2: #e37df7;
+  --muted: #8a8aa3;
+  --ok: #3ddc84;
+  --warn: #ffb020;
+  --bad: #ff5d5d;
+  --radius: 8px;
+}
+
+* { box-sizing: border-box; }
+
+html {
+  min-height: 100vh;
+  background-color: #000;
+  background-image:
+    radial-gradient(ellipse 80% 60% at 50% -20%, rgba(155, 106, 246, 0.10) 0%, transparent 60%),
+    linear-gradient(180deg, #000000 0%, #0a0a0f 50%, #000000 100%);
+  background-attachment: fixed;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  color: var(--foreground);
+  font-family: 'Switzer', -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+a { color: var(--accent); }
+code, pre { font-family: ui-monospace, monospace; }
+
+.container { max-width: 1024px; margin: 0 auto; padding: 88px 16px 48px; }
+.nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+  background: rgba(0, 0, 0, 0.85);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+}
+.nav-inner {
+  max-width: 1024px; margin: 0 auto; padding: 12px 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.brand { font-weight: 700; font-size: 18px; }
+.card {
+  background: rgba(28, 30, 63, 0.6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.card h2 { margin: 0 0 12px; font-size: 20px; }
+.muted { color: var(--muted); font-size: 14px; }
+.row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+
+label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+input, textarea, select {
+  width: 100%;
+  background: #10122b;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--foreground);
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+}
+textarea { min-height: 88px; resize: vertical; }
+button {
+  cursor: pointer;
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: 14px;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+}
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+  color: #fff;
+  border: none;
+}
+.btn-secondary { background: var(--card); color: var(--foreground); }
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--border);
+}
+.badge.FUNDED { color: var(--warn); }
+.badge.SUBMITTED { color: #7db4ff; }
+.badge.ACCEPTED, .badge.RESOLVED { color: var(--ok); }
+.badge.REJECTED, .badge.REFUNDED { color: var(--bad); }
+.badge.UNDETERMINED { color: var(--warn); }
+.txbox {
+  background: #0c0e22;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-top: 12px;
+  font-size: 13px;
+  word-break: break-all;
+}
+.txbox .ok { color: var(--ok); }
+.txbox .bad { color: var(--bad); }
+.txbox .warn { color: var(--warn); }
+.kv { display: grid; grid-template-columns: 160px 1fr; gap: 6px 12px; font-size: 13px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; word-break: break-all; }
+pre.job { white-space: pre-wrap; font-size: 12px; max-height: 260px; overflow: auto; }
+.hero { text-align: center; margin-bottom: 28px; }
+.hero h1 { font-size: 40px; margin: 0 0 8px; }
+.hero p { color: var(--muted); margin: 4px 0; }
+.footer { text-align: center; color: var(--muted); font-size: 13px; padding: 24px 0; }
+.footer a { margin: 0 10px; }

@@ -1,0 +1,22 @@
+networks:
+  default: localnet
+
+  localnet:
+    url: "http://127.0.0.1:4000/api"
+
+  studionet:
+    accounts: ["${GENLAYER_PRIVATE_KEY}"]
+
+  # studio-dev (61997): kept for docs/frontend; gltest SDK 0.29/genlayer-py 0.18
+  # has no studio-dev chain definition (only studionet 61999), so integration
+  # runs on Studionet until the toolchain is upgraded.
+  studio-dev:
+    id: 61997
+    url: "https://studio-dev.genlayer.com/api"
+    accounts: ["${GENLAYER_PRIVATE_KEY}"]
+    chain_type: studionet
+
+paths:
+  contracts: "contracts"
+
+environment: .env

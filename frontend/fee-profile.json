@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "network": "studionet",
+  "chainId": 61999,
+  "measuredAt": "2026-09-18T16:30:00Z",
+  "headroom": 1.25,
+  "notes": "Studionet RPC exposes no fee-estimation endpoints (sim_getFeeConfig: Method not found; py fee_manager_contract missing), so simulation-backed budgets cannot be measured on this network with genlayer-js 2.0.0-rc.1 / genlayer-test 0.29.2. Entries below use the default zero-deposit distribution, which is PROVEN: 4 deploys + 20 state-changing writes (post_job payable, submit, judge incl. LLM consensus, reclaim/release paths in direct tests) all reached FINALIZED with execution success on Studionet (see proof/*.log). Transaction Kit re-reads live prices/caps at quote time; regenerate this file when contract branches, appeal posture, or fee policy change.",
+  "deploy": {
+    "leaderTimeunitsAllocation": "0",
+    "validatorTimeunitsAllocation": "0",
+    "executionBudgetPerRound": "0",
+    "totalMessageFees": "0",
+    "rotationsPerRound": "0"
+  },
+  "methods": {
+    "post_job": {
+      "leaderTimeunitsAllocation": "0",
+      "validatorTimeunitsAllocation": "0",
+      "executionBudgetPerRound": "0",
+      "totalMessageFees": "0",
+      "rotationsPerRound": "0"
+    },
+    "submit": {
+      "leaderTimeunitsAllocation": "0",
+      "validatorTimeunitsAllocation": "0",
+      "executionBudgetPerRound": "0",
+      "totalMessageFees": "0",
+      "rotationsPerRound": "0"
+    },
+    "judge": {
+      "leaderTimeunitsAllocation": "0",
+      "validatorTimeunitsAllocation": "0",
+      "executionBudgetPerRound": "0",
+      "totalMessageFees": "0",
+      "rotationsPerRound": "0"
+    },
+    "reclaim": {
+      "leaderTimeunitsAllocation": "0",
+      "validatorTimeunitsAllocation": "0",
+      "executionBudgetPerRound": "0",
+      "totalMessageFees": "0",
+      "rotationsPerRound": "0"
+    },
+    "release": {
+      "leaderTimeunitsAllocation": "0",
+      "validatorTimeunitsAllocation": "0",
+      "executionBudgetPerRound": "0",
+      "totalMessageFees": "0",
+      "rotationsPerRound": "0"
+    }
+  }
+}
