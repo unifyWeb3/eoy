@@ -8,6 +8,7 @@ import {
   CONTRACT_ADDRESS,
   getProvider,
 } from "../genlayer/client";
+import { directGenCall } from "../genlayer/direct-read";
 
 export type FeePreset = "low" | "standard" | "high";
 
@@ -54,32 +55,47 @@ function requireAddress(): `0x${string}` {
 }
 
 export async function readJob(jobId: number): Promise<JobRecord> {
-  const client: any = createClient({ chain: resolveChain() } as any);
-  const raw: string = await client.readContract({
-    address: requireAddress(),
-    functionName: "get_job",
-    args: [jobId],
-  });
-  return JSON.parse(raw) as JobRecord;
+  try {
+    const client: any = createClient({ chain: resolveChain() } as any);
+    const raw: string = await client.readContract({
+      address: requireAddress(),
+      functionName: "get_job",
+      args: [jobId],
+    });
+    return JSON.parse(raw) as JobRecord;
+  } catch {
+    // SDK readContract encoding is rejected by Studionet; use the proven
+    // direct gen_call path (same bytes the Python bundle reads with).
+    return JSON.parse(String(await directGenCall("get_job", [jobId]))) as JobRecord;
+  }
 }
 
 export async function readStatus(jobId: number): Promise<string> {
-  const client: any = createClient({ chain: resolveChain() } as any);
-  return (await client.readContract({
-    address: requireAddress(),
-    functionName: "get_status",
-    args: [jobId],
-  })) as string;
+  try {
+    const client: any = createClient({ chain: resolveChain() } as any);
+    return (await client.readContract({
+      address: requireAddress(),
+      functionName: "get_status",
+      args: [jobId],
+    })) as string;
+  } catch {
+    return String(await directGenCall("get_status", [jobId]));
+  }
 }
 
 export async function readBalance(): Promise<bigint> {
-  const client: any = createClient({ chain: resolveChain() } as any);
-  const bal: any = await client.readContract({
-    address: requireAddress(),
-    functionName: "get_balance",
-    args: [],
-  });
-  return BigInt(bal?.toString?.() ?? bal);
+  try {
+    const client: any = createClient({ chain: resolveChain() } as any);
+    const bal: any = await client.readContract({
+      address: requireAddress(),
+      functionName: "get_balance",
+      args: [],
+    });
+    return BigInt(bal?.toString?.() ?? bal);
+  } catch {
+    const bal = await directGenCall("get_balance", []);
+    return BigInt(typeof bal === "bigint" ? bal.toString() : Math.trunc(Number(bal)));
+  }
 }
 
 export async function fetchTx(txId: string): Promise<any> {
