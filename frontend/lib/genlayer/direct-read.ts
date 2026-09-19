@@ -24,7 +24,7 @@ const TYPE_STR = 4;
 const TYPE_ARR = 5;
 const TYPE_MAP = 6;
 
-type Encodable =
+export type Encodable =
   | null
   | boolean
   | number
@@ -93,7 +93,8 @@ function encVal(out: number[], v: Encodable): void {
   }
 }
 
-function payloadHex(method: string, args: Encodable[]): `0x${string}` {
+/** RLP([calldata, 0x00]) payload for a contract method call. Exported for writes. */
+export function payloadHex(method: string, args: Encodable[]): `0x${string}` {
   const call: Record<string, Encodable> = { method };
   if (args.length > 0) call.args = args;
   const out: number[] = [];

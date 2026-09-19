@@ -8,7 +8,7 @@ import {
   CONTRACT_ADDRESS,
   getProvider,
 } from "../genlayer/client";
-import { directGenCall } from "../genlayer/direct-read";
+import { directGenCall, payloadHex } from "../genlayer/direct-read";
 
 export type FeePreset = "low" | "standard" | "high";
 
@@ -163,45 +163,46 @@ export async function writeMethod(
       path: "transaction-kit",
     };
   } catch (kitErr) {
-    // --- Fallback: direct SDK with profile-derived fees (no estimation) ---
-    // Studionet exposes no sim_getFeeConfig, so every SDK estimation path
-    // (kit estimate + estimateTransactionFeesForWrite) fails here. Build fees
-    // directly from the committed fee-profile.json method entry instead.
-    // All entries are the proven zero-deposit distribution (see profile
-    // notes + proof/*.log: 4 deploys + 20 writes FINALIZED), so the SDK's
-    // fee resolver accepts feeValue 0n with zero extra RPC calls. No
-    // hardcoded fees: everything comes from the profile.
-    const profileEntry: any =
-      (feeProfile as any).methods?.[method] ?? (feeProfile as any).deploy ?? {};
-    const distribution = {
-      leaderTimeunitsAllocation: profileEntry.leaderTimeunitsAllocation ?? "0",
-      validatorTimeunitsAllocation:
-        profileEntry.validatorTimeunitsAllocation ?? "0",
-      executionBudgetPerRound: profileEntry.executionBudgetPerRound ?? "0",
-      totalMessageFees: profileEntry.totalMessageFees ?? "0",
-    };
-    const client: any = createClient({
-      chain: resolveChain(),
-      account: account as `0x${string}`,
-      provider: provider as any,
-    } as any);
-    const call: any = { address, functionName: method, args, value };
-    const txId = await client.writeContract({
-      ...call,
-      fees: { distribution, feeValue: 0n },
+    // --- Fallback: wallet-signed tx straight to the contract (proven path) ---
+    // The SDK's consensus.addTransaction envelope is EVM-accepted on Studionet
+    // but never scheduled for rounds (0 rounds, FINALIZED/NO_MAJORITY, no
+    // state change — reproduced twice on frontend POSTs 0x8078…/0x09fc…).
+    // The proven envelope (all Python-bundle writes, incl. job-7 POST
+    // 0x0d0b…: MAJORITY_AGREE, rounds ran) is a plain EVM tx to the contract
+    // address carrying RLP([calldata, 0x00]) with value = escrow (+0 fees).
+    // Signing stays in the browser wallet; tracking polls getTransaction.
+    const encArgs = (args as unknown[]).map((a) => {
+      if (typeof a === "number" || typeof a === "bigint" || typeof a === "string") return a;
+      throw new Error(`unsupported arg type for direct write: ${typeof a}`);
+    });
+    const data = payloadHex(method, encArgs);
+    const txId: string = await provider.request({
+      method: "eth_sendTransaction",
+      params: [
+        {
+          from: account,
+          to: address,
+          data,
+          value: "0x" + value.toString(16),
+        },
+      ],
     });
     opts.onTrack?.({ phase: "submitted", txId });
-    const decided = await client.waitForDecision({ hash: txId });
+    const client: any = createClient({ chain: resolveChain() } as any);
+    const poll = async (want: string) => {
+      const deadline = Date.now() + 10 * 60 * 1000;
+      for (;;) {
+        const t: any = await client.getTransaction({ hash: txId });
+        const name: string = t?.statusName ?? "";
+        if (name === want || name === "FINALIZED") return t;
+        if (Date.now() > deadline) throw new Error(`timed out waiting for ${want}`);
+        await new Promise((r) => setTimeout(r, 8000));
+      }
+    };
+    const decided: any = await poll("DECIDED");
     opts.onTrack?.({ phase: "decided", ...decided });
-    const finalized = await client.waitForFinalization({ hash: txId });
-    opts.onTrack?.({ phase: "finalized", ...finalized });
-    // waitFor* receipts use a different field shape than getTransaction
-    // (no statusName/txExecutionResultName), which left the tracker showing
-    // "pending…". Normalize through getTransaction so the UI always has the
-    // canonical lifecycle + execution fields.
-    const full: any = await client
-      .getTransaction({ hash: txId })
-      .catch(() => finalized);
+    const full: any = await poll("FINALIZED");
+    opts.onTrack?.({ phase: "finalized", ...full });
     const triggered = await fetchTriggered(txId).catch(() => []);
     return {
       txId,
