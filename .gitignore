@@ -19,6 +19,9 @@ __pycache__/
 .venv/
 .pytest_cache/
 artifacts/
+# Vercel CLI link (project-local, never committed)
+/frontend/.vercel
+.vercel
 /context
 /frontend/.next
 /frontend/next-env.d.ts
