@@ -195,13 +195,21 @@ export async function writeMethod(
     opts.onTrack?.({ phase: "decided", ...decided });
     const finalized = await client.waitForFinalization({ hash: txId });
     opts.onTrack?.({ phase: "finalized", ...finalized });
+    // waitFor* receipts use a different field shape than getTransaction
+    // (no statusName/txExecutionResultName), which left the tracker showing
+    // "pending…". Normalize through getTransaction so the UI always has the
+    // canonical lifecycle + execution fields.
+    const full: any = await client
+      .getTransaction({ hash: txId })
+      .catch(() => finalized);
     const triggered = await fetchTriggered(txId).catch(() => []);
     return {
       txId,
       decided,
-      finalized,
-      successful: isSuccessful(finalized),
-      executionResult: finalized?.txExecutionResultName,
+      finalized: full,
+      successful: isSuccessful(full),
+      executionResult:
+        full?.txExecutionResultName ?? full?.result_name ?? full?.result,
       triggered,
       path: "direct-sdk",
     };

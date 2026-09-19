@@ -32,14 +32,14 @@ function TxView({ label, tx }: { label: string; tx: TrackedWrite | null }) {
       {ex && <div><a href={ex} target="_blank" rel="noreferrer">View in explorer</a></div>}
       <div>
         decided:{" "}
-        <span className="warn">{tx.decided?.statusName ?? "pending…"}</span>
+        <span className="warn">{tx.decided?.statusName ?? (tx.decided ? "decided" : "pending…")}</span>
         {"  "}finalized:{" "}
-        <span className={tx.finalized ? "ok" : "warn"}>
-          {tx.finalized?.statusName ?? "pending…"}
+        <span className={tx.finalized?.statusName ? "ok" : "warn"}>
+          {tx.finalized?.statusName ?? (tx.finalized ? "recorded" : "pending…")}
         </span>
       </div>
       <div>
-        execution: <code>{tx.executionResult ?? "—"}</code>{" "}
+        execution: <code>{String(tx.executionResult ?? tx.finalized?.result_name ?? "—")}</code>{" "}
         {tx.successful ? (
           <span className="ok">SUCCESS (isSuccessful)</span>
         ) : (
@@ -269,7 +269,9 @@ export default function HomePage() {
             <button className="btn-secondary" onClick={async () => {
               if (lastTx) {
                 const t = await fetchTx(lastTx.txId);
-                setTrackLog((p) => [...p, `getTransaction: ${t?.statusName} / ${t?.txExecutionResultName} / ${t?.lifecycle}`]);
+                const exec = t?.statusName ?? t?.result_name ?? "?";
+                const result = t?.txExecutionResultName ?? t?.result_name ?? String(t?.result ?? "?");
+                setTrackLog((p) => [...p, `getTransaction: ${exec} / ${result}`]);
               }
             }}>Refresh via getTransaction</button>
           </div>
