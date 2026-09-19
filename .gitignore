@@ -29,3 +29,4 @@ artifacts/
 /frontend/package-lock.json
 *.compiled.js
 package-lock.json
+.env*
