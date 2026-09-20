@@ -11,6 +11,10 @@ import {
   getStudioUrl,
 } from "../lib/genlayer/client";
 import {
+  formatConsensusPreSign,
+  type ConsensusPreSignDebug,
+} from "../lib/genlayer/consensus-write";
+import {
   readJob,
   readStatus,
   readBalance,
@@ -91,6 +95,10 @@ export default function HomePage() {
     const line = `${new Date().toISOString()} ${s?.phase ?? ""} ${s?.statusName ?? ""} ${s?.executionResultName ?? ""}`.trim();
     setTrackLog((prev) => [...prev.slice(-19), line]);
   };
+
+  async function reviewPreSign(debug: ConsensusPreSignDebug): Promise<boolean> {
+    return window.confirm(formatConsensusPreSign(debug));
+  }
 
   async function doConnect() {
     setErr("");
@@ -192,12 +200,12 @@ export default function HomePage() {
             </select>
             <button className="btn-primary" disabled={!!needWallet || !!busy} onClick={() => runWrite("post", () => {
               const deadline = Math.floor(Date.now() / 1000) + parseInt(days) * 86400;
-              return writeMethod(account, "post_job", [title, spec, criteria, format, deadline], { value: genToWei(escrow), preset, onTrack: pushTrack });
+              return writeMethod(account, "post_job", [title, spec, criteria, format, deadline], { value: genToWei(escrow), preset, onTrack: pushTrack, onPreSign: reviewPreSign });
             })}>
               {busy === "post" ? "Posting…" : `Post job + lock ${escrow} GEN`}
             </button>
           </div>
-          <p className="muted">Value (escrow) and protocol fees are estimated and submitted separately — never hardcoded.</p>
+          <p className="muted">Before MetaMask opens, the GenLayer intake, selector, embedded recipient, payload, validators, rotations, and value are shown for review.</p>
         </div>
 
         <div className="card">
@@ -238,7 +246,7 @@ export default function HomePage() {
             </div>
           </div>
           <div className="row" style={{ marginTop: 12 }}>
-            <button className="btn-secondary" disabled={!!needWallet || !!busy} onClick={() => runWrite("submit", () => writeMethod(account, "submit", [parseInt(jobId), url, hash, desc], { preset, onTrack: pushTrack }))}>
+            <button className="btn-secondary" disabled={!!needWallet || !!busy} onClick={() => runWrite("submit", () => writeMethod(account, "submit", [parseInt(jobId), url, hash, desc], { preset, onTrack: pushTrack, onPreSign: reviewPreSign }))}>
               {busy === "submit" ? "Submitting…" : "Submit"}
             </button>
           </div>
@@ -248,13 +256,13 @@ export default function HomePage() {
           <h2>4 · Judge / reclaim / release</h2>
           <p className="muted">Judge runs validator consensus (minutes). Reclaim refunds the payer after reject/expiry. Release finalizes an accepted payout.</p>
           <div className="row">
-            <button className="btn-primary" disabled={!!needWallet || !!busy} onClick={() => runWrite("judge", () => writeMethod(account, "judge", [parseInt(jobId)], { preset, onTrack: pushTrack }))}>
+            <button className="btn-primary" disabled={!!needWallet || !!busy} onClick={() => runWrite("judge", () => writeMethod(account, "judge", [parseInt(jobId)], { preset, onTrack: pushTrack, onPreSign: reviewPreSign }))}>
               {busy === "judge" ? "Judging…" : "Judge"}
             </button>
-            <button className="btn-secondary" disabled={!!needWallet || !!busy} onClick={() => runWrite("reclaim", () => writeMethod(account, "reclaim", [parseInt(jobId)], { preset, onTrack: pushTrack }))}>
+            <button className="btn-secondary" disabled={!!needWallet || !!busy} onClick={() => runWrite("reclaim", () => writeMethod(account, "reclaim", [parseInt(jobId)], { preset, onTrack: pushTrack, onPreSign: reviewPreSign }))}>
               Reclaim (payer)
             </button>
-            <button className="btn-secondary" disabled={!!needWallet || !!busy} onClick={() => runWrite("release", () => writeMethod(account, "release", [parseInt(jobId)], { preset, onTrack: pushTrack }))}>
+            <button className="btn-secondary" disabled={!!needWallet || !!busy} onClick={() => runWrite("release", () => writeMethod(account, "release", [parseInt(jobId)], { preset, onTrack: pushTrack, onPreSign: reviewPreSign }))}>
               Release (accepted)
             </button>
           </div>

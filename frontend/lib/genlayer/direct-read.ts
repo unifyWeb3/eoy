@@ -102,12 +102,7 @@ export function payloadHex(method: string, args: Encodable[]): `0x${string}` {
   return toRlp([toHex(new Uint8Array(out)), "0x00"]);
 }
 
-/**
- * RLP([calldata, b'']) payload for direct-to-contract WRITES.
- * The write intake requires the empty flag (Python `rlp.encode(False)` →
- * `0x80`); the read flag `0x00` is treated as an ordinary value transfer
- * (moves GEN, zero rounds, no state change — see 0x6acf… diagnosis).
- */
+/** RLP([calldata, b'']) payload used inside the consensus addTransaction wrapper. */
 export function payloadHexWrite(method: string, args: Encodable[]): `0x${string}` {
   const call: Record<string, Encodable> = { method };
   if (args.length > 0) call.args = args;
