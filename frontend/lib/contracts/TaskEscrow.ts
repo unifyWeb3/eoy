@@ -8,7 +8,7 @@ import {
   CONTRACT_ADDRESS,
   getProvider,
 } from "../genlayer/client";
-import { directGenCall, payloadHex } from "../genlayer/direct-read";
+import { directGenCall, payloadHexWrite } from "../genlayer/direct-read";
 
 export type FeePreset = "low" | "standard" | "high";
 
@@ -169,13 +169,15 @@ export async function writeMethod(
     // state change — reproduced twice on frontend POSTs 0x8078…/0x09fc…).
     // The proven envelope (all Python-bundle writes, incl. job-7 POST
     // 0x0d0b…: MAJORITY_AGREE, rounds ran) is a plain EVM tx to the contract
-    // address carrying RLP([calldata, 0x00]) with value = escrow (+0 fees).
+    // address carrying RLP([calldata, b'']) with value = escrow (+0 fees).
+    // The empty flag is load-bearing: the read flag 0x00 yields an ordinary
+    // value transfer with zero rounds and no state change (see 0x6acf…).
     // Signing stays in the browser wallet; tracking polls getTransaction.
     const encArgs = (args as unknown[]).map((a) => {
       if (typeof a === "number" || typeof a === "bigint" || typeof a === "string") return a;
       throw new Error(`unsupported arg type for direct write: ${typeof a}`);
     });
-    const data = payloadHex(method, encArgs);
+    const data = payloadHexWrite(method, encArgs);
     const txId: string = await provider.request({
       method: "eth_sendTransaction",
       params: [

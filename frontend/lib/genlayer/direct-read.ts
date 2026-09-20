@@ -93,13 +93,27 @@ function encVal(out: number[], v: Encodable): void {
   }
 }
 
-/** RLP([calldata, 0x00]) payload for a contract method call. Exported for writes. */
+/** RLP([calldata, 0x00]) payload for gen_call READS (proven via readContract path). */
 export function payloadHex(method: string, args: Encodable[]): `0x${string}` {
   const call: Record<string, Encodable> = { method };
   if (args.length > 0) call.args = args;
   const out: number[] = [];
   encVal(out, call);
   return toRlp([toHex(new Uint8Array(out)), "0x00"]);
+}
+
+/**
+ * RLP([calldata, b'']) payload for direct-to-contract WRITES.
+ * The write intake requires the empty flag (Python `rlp.encode(False)` →
+ * `0x80`); the read flag `0x00` is treated as an ordinary value transfer
+ * (moves GEN, zero rounds, no state change — see 0x6acf… diagnosis).
+ */
+export function payloadHexWrite(method: string, args: Encodable[]): `0x${string}` {
+  const call: Record<string, Encodable> = { method };
+  if (args.length > 0) call.args = args;
+  const out: number[] = [];
+  encVal(out, call);
+  return toRlp([toHex(new Uint8Array(out)), "0x"]);
 }
 
 function decodeCalldata(hex: string): number | bigint | string {
