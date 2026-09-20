@@ -21,6 +21,8 @@ import {
   fetchTx,
   writeMethod,
   genToWei,
+  classifyTransaction,
+  normalizeDeliveryUrl,
   type JobRecord,
   type TrackedWrite,
   type FeePreset,
@@ -29,6 +31,7 @@ import {
 function TxView({ label, tx }: { label: string; tx: TrackedWrite | null }) {
   if (!tx) return null;
   const ex = getExplorerTxUrl(tx.txId);
+  const classification = classifyTransaction(tx.finalized);
   return (
     <div className="txbox">
       <div><b>{label}</b> via {tx.path}</div>
@@ -43,15 +46,16 @@ function TxView({ label, tx }: { label: string; tx: TrackedWrite | null }) {
         </span>
       </div>
       <div>
-        execution: <code>{String(tx.executionResult ?? tx.finalized?.result_name ?? "—")}</code>{" "}
-        {tx.successful ? (
-          <span className="ok">SUCCESS (isSuccessful)</span>
-        ) : (
-          <span className="bad">NOT SUCCESSFUL</span>
-        )}
+        consensus: <code>{classification.consensusResult ?? "—"}</code>{"  "}
+        execution: <code>{classification.executionResult ?? "—"}</code>{" "}
+        {classification.outcome === "success" && <span className="ok">SUCCESS</span>}
+        {classification.outcome === "execution-error" && <span className="bad">CONTRACT EXECUTION ERROR</span>}
+        {classification.outcome === "undetermined" && <span className="warn">EXECUTION UNDETERMINED</span>}
       </div>
       {tx.triggered && tx.triggered.length > 0 && (
-        <div>child payout txs: {tx.triggered.map((t) => <div key={t}><code>{t}</code></div>)}</div>
+        <div>
+          native child payout(s): {tx.triggered.map((t) => <div key={t}><code>{t}</code></div>)}
+        </div>
       )}
     </div>
   );
@@ -92,7 +96,15 @@ export default function HomePage() {
   const [desc, setDesc] = useState("Delivery completed");
 
   const pushTrack = (s: any) => {
-    const line = `${new Date().toISOString()} ${s?.phase ?? ""} ${s?.statusName ?? ""} ${s?.executionResultName ?? ""}`.trim();
+    const classification = classifyTransaction(s);
+    const line = [
+      new Date().toISOString(),
+      s?.phase ?? "",
+      s?.statusName ?? "",
+      `consensus=${classification.consensusResult ?? "—"}`,
+      `execution=${classification.executionResult ?? "—"}`,
+      classification.outcome,
+    ].join(" ").trim();
     setTrackLog((prev) => [...prev.slice(-19), line]);
   };
 
@@ -246,7 +258,11 @@ export default function HomePage() {
             </div>
           </div>
           <div className="row" style={{ marginTop: 12 }}>
-            <button className="btn-secondary" disabled={!!needWallet || !!busy} onClick={() => runWrite("submit", () => writeMethod(account, "submit", [parseInt(jobId), url, hash, desc], { preset, onTrack: pushTrack, onPreSign: reviewPreSign }))}>
+            <button className="btn-secondary" disabled={!!needWallet || !!busy} onClick={() => runWrite("submit", () => {
+              const deliveryUrl = normalizeDeliveryUrl(url);
+              setUrl(deliveryUrl);
+              return writeMethod(account, "submit", [parseInt(jobId), deliveryUrl, hash, desc], { preset, onTrack: pushTrack, onPreSign: reviewPreSign });
+            })}>
               {busy === "submit" ? "Submitting…" : "Submit"}
             </button>
           </div>
@@ -277,9 +293,8 @@ export default function HomePage() {
             <button className="btn-secondary" onClick={async () => {
               if (lastTx) {
                 const t = await fetchTx(lastTx.txId);
-                const exec = t?.statusName ?? t?.result_name ?? "?";
-                const result = t?.txExecutionResultName ?? t?.result_name ?? String(t?.result ?? "?");
-                setTrackLog((p) => [...p, `getTransaction: ${exec} / ${result}`]);
+                const classification = classifyTransaction(t);
+                setTrackLog((p) => [...p, `getTransaction: ${classification.status ?? "?"} / consensus=${classification.consensusResult ?? "?"} / execution=${classification.executionResult ?? "?"} / ${classification.outcome}`]);
               }
             }}>Refresh via getTransaction</button>
           </div>

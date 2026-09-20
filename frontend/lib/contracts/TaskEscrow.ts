@@ -35,9 +35,70 @@ export interface TrackedWrite {
   decided?: any;
   finalized?: any;
   successful: boolean;
+  consensusResult?: string;
   executionResult?: string;
+  outcome: TransactionOutcome;
   triggered?: string[];
   path: "consensus-wallet";
+}
+
+export type TransactionOutcome =
+  | "success"
+  | "execution-error"
+  | "undetermined";
+
+export interface TransactionClassification {
+  status?: string;
+  consensusResult?: string;
+  executionResult?: string;
+  outcome: TransactionOutcome;
+}
+
+/** Normalize and validate a delivery URL before any wallet request is made. */
+export function normalizeDeliveryUrl(input: string): string {
+  const normalized = input.trim();
+  if (!normalized) throw new Error("Delivery URL is required");
+
+  let parsed: URL;
+  try {
+    parsed = new URL(normalized);
+  } catch {
+    throw new Error("Delivery URL must be a valid URL");
+  }
+  if (parsed.protocol !== "https:") {
+    throw new Error("Delivery URL must start with https://");
+  }
+  if (!parsed.hostname) {
+    throw new Error("Delivery URL must include a host");
+  }
+  return normalized;
+}
+
+function executionResultOf(tx: any): string | undefined {
+  return tx?.txExecutionResultName
+    ?? tx?.executionResultName
+    ?? tx?.execution_result_name
+    ?? (tx?.execution_result === "SUCCESS" ? "FINISHED_WITH_RETURN" : undefined)
+    ?? (tx?.execution_result === "ERROR" ? "FINISHED_WITH_ERROR" : undefined);
+}
+
+/** Keep consensus outcome and GenVM execution outcome separate in the UI. */
+export function classifyTransaction(tx: any): TransactionClassification {
+  if (!tx) return { outcome: "undetermined" };
+  const status = tx?.statusName ?? tx?.status_name;
+  const consensusResult = tx?.resultName ?? tx?.result_name;
+  const executionResult = executionResultOf(tx);
+  const successful = isSuccessful(tx)
+    || ((status === "ACCEPTED" || status === "FINALIZED")
+      && executionResult === "FINISHED_WITH_RETURN");
+
+  if (successful) {
+    return { status, consensusResult, executionResult: "FINISHED_WITH_RETURN", outcome: "success" };
+  }
+  if (executionResult === "FINISHED_WITH_ERROR") {
+    return { status, consensusResult, executionResult, outcome: "execution-error" };
+  }
+  return { status, consensusResult, executionResult, outcome: "undetermined" };
 }
 
 /** Parse a GEN amount like "0.002" into wei bigint. */
@@ -161,9 +222,15 @@ export async function writeMethod(
   const full: any = await poll("FINALIZED");
   opts.onTrack?.({ phase: "finalized", ...full });
   const triggered = await fetchTriggered(txId).catch(() => []);
+  const classification = classifyTransaction(full);
   return {
-    txId, decided, finalized: full, successful: isSuccessful(full),
-    executionResult: full?.txExecutionResultName ?? full?.result_name ?? full?.result,
+    txId,
+    decided,
+    finalized: full,
+    successful: classification.outcome === "success",
+    consensusResult: classification.consensusResult,
+    executionResult: classification.executionResult,
+    outcome: classification.outcome,
     triggered, path: "consensus-wallet",
   };
 }
