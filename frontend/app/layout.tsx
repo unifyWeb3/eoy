@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { PRODUCT_NAME } from "../lib/brand";
 
 export const metadata: Metadata = {
-  title: "Task Escrow — GenLayer Adjudication",
-  description: "Agent task escrow with GenLayer validator consensus: post code jobs, submit deliveries, judge against a rubric.",
+  title: `${PRODUCT_NAME} — Verdict infrastructure for agentic work`,
+  description:
+    "Lock payment, define acceptance criteria, let GenLayer validators judge the submitted evidence, and settle automatically.",
   manifest: "/site.webmanifest",
   icons: {
     icon: [
@@ -13,7 +15,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#9B6AF6", // GenLayer brand purple
+  themeColor: "#FAFAF7", // warm-white canvas
 };
 
 export default function RootLayout({

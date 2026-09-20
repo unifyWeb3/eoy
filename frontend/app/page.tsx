@@ -1,316 +1,147 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  connectWallet,
-  getProvider,
-  CONTRACT_ADDRESS,
-  CHAIN_ID,
-  RPC_URL,
-  getExplorerTxUrl,
-  getStudioUrl,
-} from "../lib/genlayer/client";
-import {
-  formatConsensusPreSign,
-  type ConsensusPreSignDebug,
-} from "../lib/genlayer/consensus-write";
-import {
-  readJob,
-  readStatus,
-  readBalance,
-  fetchTx,
-  writeMethod,
-  genToWei,
-  classifyTransaction,
-  normalizeDeliveryUrl,
-  type JobRecord,
-  type TrackedWrite,
-  type FeePreset,
-} from "../lib/contracts/TaskEscrow";
+import Link from "next/link";
+import { SiteHeader, SiteFooter } from "../components/site";
+import { FlowDiagram } from "../components/flow-diagram";
+import { ReceiptCard } from "../components/ui/receipt-card";
+import { Button } from "../components/ui/button";
+import { Badge } from "../components/ui/badge";
+import { CANONICAL_PROOF } from "../lib/proof";
 
-function TxView({ label, tx }: { label: string; tx: TrackedWrite | null }) {
-  if (!tx) return null;
-  const ex = getExplorerTxUrl(tx.txId);
-  const classification = classifyTransaction(tx.finalized);
+function Section({
+  id,
+  eyebrow,
+  title,
+  children,
+  plain,
+}: {
+  id?: string;
+  eyebrow?: string;
+  title: string;
+  children: React.ReactNode;
+  plain?: boolean;
+}) {
   return (
-    <div className="txbox">
-      <div><b>{label}</b> via {tx.path}</div>
-      <div>tx: <code>{tx.txId}</code></div>
-      {ex && <div><a href={ex} target="_blank" rel="noreferrer">View in explorer</a></div>}
-      <div>
-        decided:{" "}
-        <span className="warn">{tx.decided?.statusName ?? (tx.decided ? "decided" : "pending…")}</span>
-        {"  "}finalized:{" "}
-        <span className={tx.finalized?.statusName ? "ok" : "warn"}>
-          {tx.finalized?.statusName ?? (tx.finalized ? "recorded" : "pending…")}
-        </span>
-      </div>
-      <div>
-        consensus: <code>{classification.consensusResult ?? "—"}</code>{"  "}
-        execution: <code>{classification.executionResult ?? "—"}</code>{" "}
-        {classification.outcome === "success" && <span className="ok">SUCCESS</span>}
-        {classification.outcome === "execution-error" && <span className="bad">CONTRACT EXECUTION ERROR</span>}
-        {classification.outcome === "undetermined" && <span className="warn">EXECUTION UNDETERMINED</span>}
-      </div>
-      {tx.triggered && tx.triggered.length > 0 && (
-        <div>
-          native child payout(s): {tx.triggered.map((t) => <div key={t}><code>{t}</code></div>)}
-        </div>
+    <section id={id} className="mx-auto max-w-[1120px] scroll-mt-20 px-4 py-14 sm:px-6 sm:py-20">
+      {eyebrow && (
+        <p className="text-xs font-bold tracking-[0.14em] text-[#2440d8] uppercase">{eyebrow}</p>
       )}
-    </div>
+      <h2 className="mt-2 max-w-[640px] text-2xl font-bold tracking-tight text-[#101828] sm:text-[32px] sm:leading-[1.2]">
+        {title}
+      </h2>
+      <div className={plain ? "mt-6" : "mt-6"}>{children}</div>
+    </section>
   );
 }
 
-export default function HomePage() {
-  const [account, setAccount] = useState<string>("");
-  // Mounted gate: getProvider() branches on typeof window, so reading it
-  // during render mismatches SSR HTML (server: no wallet). Render null for
-  // wallet-dependent UI until after mount to keep hydration consistent.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-  const [jobId, setJobId] = useState<string>("0");
-  const [job, setJob] = useState<JobRecord | null>(null);
-  const [balance, setBalance] = useState<string>("");
-  const [preset, setPreset] = useState<FeePreset>("standard");
-  const [busy, setBusy] = useState<string>("");
-  const [err, setErr] = useState<string>("");
-  const [lastTx, setLastTx] = useState<TrackedWrite | null>(null);
-  const [trackLog, setTrackLog] = useState<string[]>([]);
-
-  // post form
-  const [title, setTitle] = useState("Build CSV parser CLI tool");
-  const [spec, setSpec] = useState(
-    "Implement a Python CLI that parses CSV files with headers, validates required columns id,name,amount, outputs JSON to stdout, and exits non-zero on bad input."
-  );
-  const [criteria, setCriteria] = useState(
-    "Must accept a file path arg, handle quoted commas, reject missing columns, print valid JSON array, and include --help text describing usage and options."
-  );
-  const [format, setFormat] = useState("public repo URL + commit hash + description");
-  const [days, setDays] = useState("7");
-  const [escrow, setEscrow] = useState("0.002");
-  // submit form
-  const [url, setUrl] = useState("https://github.com/org/repo/commit/abc123");
-  const [hash, setHash] = useState("abc123hash");
-  const [desc, setDesc] = useState("Delivery completed");
-
-  const pushTrack = (s: any) => {
-    const classification = classifyTransaction(s);
-    const line = [
-      new Date().toISOString(),
-      s?.phase ?? "",
-      s?.statusName ?? "",
-      `consensus=${classification.consensusResult ?? "—"}`,
-      `execution=${classification.executionResult ?? "—"}`,
-      classification.outcome,
-    ].join(" ").trim();
-    setTrackLog((prev) => [...prev.slice(-19), line]);
-  };
-
-  async function reviewPreSign(debug: ConsensusPreSignDebug): Promise<boolean> {
-    return window.confirm(formatConsensusPreSign(debug));
-  }
-
-  async function doConnect() {
-    setErr("");
-    try {
-      setAccount(await connectWallet());
-    } catch (e: any) {
-      setErr(e?.message ?? String(e));
-    }
-  }
-
-  async function loadJob() {
-    setErr("");
-    setBusy("load");
-    try {
-      const id = parseInt(jobId);
-      const [j, bal] = await Promise.all([readJob(id), readBalance()]);
-      setJob(j);
-      setBalance((Number(bal) / 1e18).toFixed(6));
-    } catch (e: any) {
-      setErr(e?.message ?? String(e));
-      setJob(null);
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function runWrite(label: string, fn: () => Promise<TrackedWrite>) {
-    setErr("");
-    setBusy(label);
-    setLastTx(null);
-    try {
-      const tx = await fn();
-      setLastTx(tx);
-      if (!tx.successful) setErr(`${label}: transaction not successful (${tx.executionResult})`);
-      await loadJob().catch(() => {});
-    } catch (e: any) {
-      setErr(`${label}: ${e?.message ?? String(e)}`);
-    } finally {
-      setBusy("");
-    }
-  }
-
-  const needWallet = !account ? "connect wallet first" : "";
-
+export default function LandingPage() {
   return (
     <div>
-      <nav className="nav">
-        <div className="nav-inner">
-          <span className="brand">Task Escrow · GenLayer</span>
-          <span className="muted">chain {CHAIN_ID}</span>
-          {account ? (
-            <code>{account}</code>
-          ) : (
-            <button className="btn-primary" onClick={doConnect}>Connect wallet</button>
-          )}
-        </div>
-      </nav>
+      <SiteHeader end={{ kind: "launch" }} />
 
-      <div className="container">
-        <div className="hero">
-          <h1>Agent Task Escrow</h1>
-          <p>Post code jobs with GEN escrow. Workers submit deliveries. GenLayer validators judge against your rubric.</p>
-          <p className="muted">Contract: <code>{CONTRACT_ADDRESS || "not configured"}</code> · <a href={getStudioUrl()} target="_blank" rel="noreferrer">Open in Studio</a></p>
-          <p className="muted">RPC: <code>{RPC_URL}</code></p>
-        </div>
-
-        {err && <div className="card"><span className="badge REJECTED">Error</span><p>{err}</p></div>}
-
-        <div className="card">
-          <h2>1 · Post a job (payable)</h2>
-          <label>Title (≥10 chars)</label>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} />
-          <label>Spec (≥80 chars)</label>
-          <textarea value={spec} onChange={(e) => setSpec(e.target.value)} />
-          <label>Acceptance criteria (≥80 chars)</label>
-          <textarea value={criteria} onChange={(e) => setCriteria(e.target.value)} />
-          <div className="grid2">
-            <div>
-              <label>Deliverable format</label>
-              <input value={format} onChange={(e) => setFormat(e.target.value)} />
-            </div>
-            <div className="grid2">
-              <div>
-                <label>Deadline (days)</label>
-                <input value={days} onChange={(e) => setDays(e.target.value)} />
-              </div>
-              <div>
-                <label>Escrow (GEN)</label>
-                <input value={escrow} onChange={(e) => setEscrow(e.target.value)} />
-              </div>
+      {/* Hero — one dominant idea, receipt as counterpart */}
+      <div className="border-b border-[#e5e2da]">
+        <div className="mx-auto grid max-w-[1120px] grid-cols-1 items-center gap-12 px-4 py-16 sm:px-6 sm:py-24 lg:grid-cols-[1.05fr_0.95fr]">
+          <div>
+            <p className="text-[13px] font-semibold text-[#667085]">Escrow that can read.</p>
+            <h1 className="mt-4 text-[44px] leading-[1.04] font-bold tracking-tight text-[#101828] sm:text-[64px]">
+              Work gets paid when the evidence passes.
+            </h1>
+            <p className="mt-6 max-w-[540px] text-lg leading-relaxed text-[#475467]">
+              Lock payment, define acceptance criteria, let GenLayer validators judge the submitted
+              evidence, and settle automatically.
+            </p>
+            <div className="mt-8">
+              <Button asChild className="px-7">
+                <Link href="/app">Launch app</Link>
+              </Button>
             </div>
           </div>
-          <div className="row" style={{ marginTop: 12 }}>
-            <label style={{ margin: 0 }}>Fee preset</label>
-            <select value={preset} onChange={(e) => setPreset(e.target.value as FeePreset)} style={{ width: 140 }}>
-              <option value="low">low</option>
-              <option value="standard">standard</option>
-              <option value="high">high</option>
-            </select>
-            <button className="btn-primary" disabled={!!needWallet || !!busy} onClick={() => runWrite("post", () => {
-              const deadline = Math.floor(Date.now() / 1000) + parseInt(days) * 86400;
-              return writeMethod(account, "post_job", [title, spec, criteria, format, deadline], { value: genToWei(escrow), preset, onTrack: pushTrack, onPreSign: reviewPreSign });
-            })}>
-              {busy === "post" ? "Posting…" : `Post job + lock ${escrow} GEN`}
-            </button>
+          <div aria-label="Canonical settlement receipt">
+            <ReceiptCard proof={CANONICAL_PROOF} />
           </div>
-          <p className="muted">Before MetaMask opens, the GenLayer intake, selector, embedded recipient, payload, validators, rotations, and value are shown for review.</p>
-        </div>
-
-        <div className="card">
-          <h2>2 · Inspect a job</h2>
-          <div className="row">
-            <input value={jobId} onChange={(e) => setJobId(e.target.value)} style={{ width: 120 }} />
-            <button className="btn-secondary" disabled={!!busy} onClick={loadJob}>{busy === "load" ? "Loading…" : "Load job"}</button>
-            {balance && <span className="muted">contract balance: {balance} GEN</span>}
-          </div>
-          {job && (
-            <div style={{ marginTop: 12 }}>
-              <span className={`badge ${job.status}`}>{job.status}</span>{" "}
-              <span className="muted">verdict: {job.verdict || "—"} · paid: {String(job.paid)}</span>
-              <dl className="kv" style={{ marginTop: 10 }}>
-                <dt>payer</dt><dd><code>{job.payer}</code></dd>
-                <dt>worker</dt><dd><code>{job.worker || "—"}</code></dd>
-                <dt>escrow</dt><dd>{(Number(job.amount_wei) / 1e18).toFixed(6)} GEN</dd>
-                <dt>delivery</dt><dd><code>{job.delivery_url || "—"}</code></dd>
-                <dt>reasoning</dt><dd>{job.reasoning || "—"}</dd>
-              </dl>
-              <pre className="job">{JSON.stringify(job, null, 2)}</pre>
-            </div>
-          )}
-        </div>
-
-        <div className="card">
-          <h2>3 · Submit delivery (worker)</h2>
-          <label>Delivery URL (https + allowlisted host)</label>
-          <input value={url} onChange={(e) => setUrl(e.target.value)} />
-          <div className="grid2">
-            <div>
-              <label>Content hash</label>
-              <input value={hash} onChange={(e) => setHash(e.target.value)} />
-            </div>
-            <div>
-              <label>Description</label>
-              <input value={desc} onChange={(e) => setDesc(e.target.value)} />
-            </div>
-          </div>
-          <div className="row" style={{ marginTop: 12 }}>
-            <button className="btn-secondary" disabled={!!needWallet || !!busy} onClick={() => runWrite("submit", () => {
-              const deliveryUrl = normalizeDeliveryUrl(url);
-              setUrl(deliveryUrl);
-              return writeMethod(account, "submit", [parseInt(jobId), deliveryUrl, hash, desc], { preset, onTrack: pushTrack, onPreSign: reviewPreSign });
-            })}>
-              {busy === "submit" ? "Submitting…" : "Submit"}
-            </button>
-          </div>
-        </div>
-
-        <div className="card">
-          <h2>4 · Judge / reclaim / release</h2>
-          <p className="muted">Judge runs validator consensus (minutes). Reclaim refunds the payer after reject/expiry. Release finalizes an accepted payout.</p>
-          <div className="row">
-            <button className="btn-primary" disabled={!!needWallet || !!busy} onClick={() => runWrite("judge", () => writeMethod(account, "judge", [parseInt(jobId)], { preset, onTrack: pushTrack, onPreSign: reviewPreSign }))}>
-              {busy === "judge" ? "Judging…" : "Judge"}
-            </button>
-            <button className="btn-secondary" disabled={!!needWallet || !!busy} onClick={() => runWrite("reclaim", () => writeMethod(account, "reclaim", [parseInt(jobId)], { preset, onTrack: pushTrack, onPreSign: reviewPreSign }))}>
-              Reclaim (payer)
-            </button>
-            <button className="btn-secondary" disabled={!!needWallet || !!busy} onClick={() => runWrite("release", () => writeMethod(account, "release", [parseInt(jobId)], { preset, onTrack: pushTrack, onPreSign: reviewPreSign }))}>
-              Release (accepted)
-            </button>
-          </div>
-        </div>
-
-        <TxView label="Last transaction" tx={lastTx} />
-
-        {trackLog.length > 0 && (
-          <div className="card">
-            <h2>Lifecycle log</h2>
-            <pre className="job">{trackLog.join("\n")}</pre>
-            <button className="btn-secondary" onClick={async () => {
-              if (lastTx) {
-                const t = await fetchTx(lastTx.txId);
-                const classification = classifyTransaction(t);
-                setTrackLog((p) => [...p, `getTransaction: ${classification.status ?? "?"} / consensus=${classification.consensusResult ?? "?"} / execution=${classification.executionResult ?? "?"} / ${classification.outcome}`]);
-              }
-            }}>Refresh via getTransaction</button>
-          </div>
-        )}
-
-        <div className="card">
-          <h2>Finality, not receipt</h2>
-          <p className="muted">A transaction is only treated as complete after <b>finalized</b> status plus <b>isSuccessful</b> and <b>FINISHED_WITH_RETURN</b>. “Decided” alone never counts — the tracker above always shows both stages separately.</p>
-          {!mounted ? null : !getProvider() && <p className="muted">No browser wallet detected. Reads work without a wallet; writes need MetaMask (or compatible) on chain {CHAIN_ID}.</p>}
-        </div>
-
-        <div className="footer">
-          <a href="https://studio.genlayer.com" target="_blank" rel="noreferrer">Studio</a>
-          <a href="https://docs.genlayer.com" target="_blank" rel="noreferrer">Docs</a>
         </div>
       </div>
+
+      {/* How it works — one connected process */}
+      <Section id="how" eyebrow="How it works" title="Define done. Prove it. Get paid.">
+        <FlowDiagram />
+      </Section>
+
+      {/* Canonical proof */}
+      <div className="border-y border-[#e5e2da] bg-white">
+        <Section id="proof" eyebrow="Canonical live proof" title={`Job #${CANONICAL_PROOF.jobId} · ${CANONICAL_PROOF.status} on Studionet`}>
+          <p className="max-w-[640px] text-[15px] leading-relaxed text-[#475467]">
+            Created from a browser wallet through the production write path and judged by GenLayer
+            consensus. Escrow {CANONICAL_PROOF.escrowGen} GEN. These are the verified on-chain values —
+            nothing here is illustrative.
+          </p>
+          <div className="mt-6 max-w-[720px]">
+            <ReceiptCard proof={CANONICAL_PROOF} />
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Badge tone="accept">Post · finalized / majority-agree</Badge>
+            <Badge tone="accept">Submit · finalized / majority-agree</Badge>
+            <Badge tone="accept">Judge · finalized / majority-agree</Badge>
+            <Badge tone="accept">Settlement · paid</Badge>
+          </div>
+        </Section>
+      </div>
+
+      {/* Problem + use cases */}
+      <Section eyebrow="Problem" title="Someone always decides what “done” means. Make it neutral.">
+        <div className="grid max-w-[880px] grid-cols-1 gap-6 text-[15px] leading-relaxed text-[#475467] sm:grid-cols-2">
+          <div>
+            <p className="font-bold text-[#101828]">Freelance and bounty payouts stall on disagreement</p>
+            <p className="mt-1">
+              A buyer and a worker read the same delivery and reach different verdicts. Platforms
+              resolve this with staff, delays, and fees — or not at all.
+            </p>
+          </div>
+          <div>
+            <p className="font-bold text-[#101828]">Agents need machine-readable acceptance</p>
+            <p className="mt-1">
+              Agentic work fails on subjective review: code quality, completeness, fitness for purpose.
+              A neutral verdict rail turns that review into a receipt payment systems can act on.
+            </p>
+          </div>
+        </div>
+      </Section>
+
+      {/* Why GenLayer */}
+      <div className="border-y border-[#e5e2da] bg-white">
+        <Section eyebrow="Architecture" title="Why GenLayer does the judging">
+          <div className="grid max-w-[880px] grid-cols-1 gap-6 text-[15px] leading-relaxed text-[#475467] sm:grid-cols-2">
+            <p>
+              The escrow contract lives on GenLayer, so it can fetch delivery content from the web
+              and ask validator consensus what deterministic code cannot decide: does this delivery
+              satisfy the rubric?
+            </p>
+            <p>
+              Validators compare independent judgments and commit one verdict onchain. The receipt —
+              status, verdict, payout state — is final and auditable by anyone.
+            </p>
+          </div>
+        </Section>
+      </div>
+
+      {/* Limitations — demoted, plain */}
+      <div className="mx-auto max-w-[1120px] px-4 py-14 sm:px-6 sm:py-16">
+        <h2 className="text-lg font-bold text-[#101828]">Limitations</h2>
+        <ul className="mt-3 max-w-[720px] list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-[#667085]">
+          <li>Testnet build on GenLayer Studionet. Funds are test GEN with no real value.</li>
+          <li>Studionet exposes no fee-estimation endpoint; the app uses a measured fee profile with a direct fallback.</li>
+          <li>An UNDETERMINED verdict has been exercised in simulation only, not yet on a live network.</li>
+          <li>0.004 GEN sits unaccounted at the contract from two malformed early attempts, with no recovery path in the current contract.</li>
+        </ul>
+        <div className="mt-8">
+          <Button asChild className="px-7">
+            <Link href="/app">Launch app</Link>
+          </Button>
+        </div>
+      </div>
+
+      <SiteFooter />
     </div>
   );
 }
